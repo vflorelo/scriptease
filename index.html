@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+  <meta http-equiv="Content-Type"    content="text/html; charset=UTF-8"            />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge"                             />
+  <meta name="viewport"              content="width=device-width, initial-scale=1" />
+  <meta name="keywords"              content=""                                    />
+  <meta name="description"           content=""                                    />
+  <script src="js/jquery-3.6.0.min.js" ></script>
+  <script src="js/bootstrap.min.js"    ></script>
+  <script src="js/htmlencode.min.js"   ></script>
+  <script src="codemirror/lib/codemirror.js"></script>
+  <script src="codemirror/mode/shell/shell.js"></script>
+  <link rel="stylesheet" href="codemirror/lib/codemirror.css"           />
+  <link rel="stylesheet" href="css/bootstrap.min.css"   type="text/css" />
+  <link rel="stylesheet" href="css/bootstrap-icons.css" type="text/css" />
+  <title>.:Scriptease:. .:Waller Lab:.</title>
+  <style>
+    #actions          {position  : absolute ; right     :0         ; bottom:0 ; z-index: 1   }
+    #show_hide_button {position  : absolute ; right     :0         ; bottom:0 ; z-index: 500 }
+    .overflowed       {height    : 100%     ; overflow-y: scroll;}
+  </style>
+</head>
+<body onload="resize_divs();restart_form();get_module_list()">
+<div id="script_dialog" name="script_dialog" class="modal fade" role="dialog">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-primary"><h3 class="text-center text-white font-weight-bold">Atention</h3></div>
+      <div class="modal-body" id="script_dialog_message" name="script_dialog_message"></div>
+    </div>
+  </div>
+</div>
+<div id="show_hide_button" class="btn btn-success bi bi-arrow-down-square-fill" type="button" data-bs-toggle="collapse" data-bs-target="#actions" aria-expanded="false" aria-controls="actions" onclick="toggle_up_down('down')"></div>
+<div class="card col-3 collapse show" id="actions" >
+  <div class="card card-header bg-danger text-white text-center font-weight-bold"><h3>Actions</h3></div>
+  <div class="card card-body">
+    <div class="btn-group">
+      <button type="button" class="btn btn-lg btn-primary"   name="download_script" id="download_script" onclick="download_script()">Download <span class="bi bi-save"></span></button>
+      <button type="button" class="btn btn-lg btn-secondary" name="restart_form"    id="restart_form"    onclick="restart_form()"   >Reset    <span class="bi bi-arrow-counterclockwise"></span></button>
+    </div>
+  </div>
+</div>
+<div class="card" id="script_settings" name="script_settings">
+    <div class="card card-header bg-primary text-white text-center font-weight-bold"><h3>Main settings</h3></div>
+    <div class="card card-body overflow-auto">
+      <div class="input-group mb-3">
+        <span class="input-group-text">Script name: </span>
+        <input type="text" name="script_name" id="script_name" class="form-control"  oninput="check_script_limits('name',this.value)"           required />
+      </div>
+      <div class="input-group mb-3">
+        <span class="input-group-text">CPU count:</span>
+        <input type="number" name="script_cpu" id="script_cpu" class="form-control"  oninput="check_script_limits('cpu',this.value)"            required value="4"/>
+        <span class="input-group-text">Memory (Gb):</span>
+        <input type="number" name="script_mem" id="script_mem" class="form-control"  oninput="check_script_limits('mem',this.value)"            required value="16"/>
+      </div>
+      <div class="input-group mb-3">
+        <span class="input-group-text">Time: H: </span>
+        <input class="form-control" type="number" name="script_hours"   id="script_hours"   oninput="check_script_limits('hours',this.value)"   required value="04"/>
+        <span  class="input-group-text">M:</span>
+        <input class="form-control" type="number" name="script_minutes" id="script_minutes" oninput="check_script_limits('minutes',this.value)" required value="00"/>
+        <span  class="input-group-text">S:</span>
+        <input class="form-control" type="number" name="script_seconds" id="script_seconds" oninput="check_script_limits('seconds',this.value)" required value="00"/>
+      </div>
+    </div>
+  </div>
+<div class="card" id="script_body"     name="script_body">
+    <div class="card card-header bg-success text-white text-center font-weight-bold"><h3>Script body</h3></div>
+    <div class="card card-body overflow-auto" name="user_code_container" id="user_code_container">
+      <textarea name="user_code" id="user_code"></textarea>
+    </div>
+  </div>
+<div class="card" id="script_modules"  name="script_modules">
+    <div class="card card-header bg-secondary text-white text-center font-weight-bold"><h3>Script modules</h3></div>
+    <div class="card card-body overflowed">
+      <div name="available_modules" id="available_modules"></div>
+    </div>
+  </div>
+<div class="card" id="script_preview"  name="script_preview">
+    <div class="card card-header bg-warning text-white text-center font-weight-bold"><h3>Preview</h3></div>
+    <div class="card card-body overflowed">
+      <div class="container">
+        <pre><code id="script_header"      name="script_header"></code></pre>
+        <pre><code id="script_module_list" name="script_module_list"></code></pre>
+        <pre><code id="script_user_code"   name="script_user_code"></code></pre>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+<script type="text/javascript">
+function restart_form(){
+  $("#script_name").val("");
+  $("#script_cpu").val("4");
+  $("#script_mem").val("16");
+  $("#script_hours").val("04");
+  $("#script_minutes").val("00");
+  $("#script_seconds").val("00");
+  $("#user_code_container").empty();
+  var text_area_str = "<textarea name=\"user_code\" id=\"user_code\"></textarea>";
+  $("#user_code_container").html(text_area_str);
+  mask_user_code();
+  $(".module_list").each(function(){
+    if($(this).is(":checked")){
+      $(this).prop("checked",false);
+      }
+    });
+  $("#script_header").html("");
+  $("#script_module_list").html("");
+  $("#script_user_code").html("");
+  }
+function resize_divs(){
+  var body_height     = $(window).height() ;
+  var body_width      = $(window).width() ;
+  var height_third    = body_height / 3;
+  var height_twothird = body_height - (body_height / 3);
+  var height_half     = body_height / 2;
+  var width_half      = body_width  / 2 ;
+  $("#script_settings").css({ "height"   : height_third,
+                              "width"    : width_half,
+                              "position" : "fixed",
+                              "top"      : 0,
+                              "left"     : 0});
+  $("#script_body").css({     "height"   : height_half,
+                              "width"    : width_half,
+                              "position" : "fixed",
+                              "top"      : 0,
+                              "left"     : width_half});
+  $("#script_modules").css({  "height"   : height_twothird,
+                              "width"    : width_half,
+                              "position" : "fixed",
+                              "top"      : height_third,
+                              "left"     : 0});
+  $("#script_preview").css({  "height"   : height_half,
+                              "width"    : width_half,
+                              "position" : "fixed",
+                              "top"      : height_half,
+                              "left"     : width_half});
+  }
+function toggle_up_down(direction){
+  if(direction == "up"){
+    $("#show_hide_button").attr("onclick","toggle_up_down('down')")
+    $("#show_hide_button").removeClass("bi-arrow-up-square-fill").addClass("bi-arrow-down-square-fill")
+    }
+  else{
+    $("#show_hide_button").attr("onclick","toggle_up_down('up')")
+    $("#show_hide_button").removeClass("bi-arrow-down-square-fill").addClass("bi-arrow-up-square-fill")
+    }
+  }
+function get_module_list(){
+  var form_data  = new FormData()       ;
+  var target_url = "get_module_list.php" ;
+  $.ajax({
+    url         : target_url,
+    dataType    : 'script',
+    cache       : false,
+    contentType : false,
+    processData : false,
+    data        : form_data,
+    type        : 'post',
+    complete    : function (modules){
+                  var modules_xml_data   = modules.responseText ;
+  								var xml_data           = $.parseXML(modules_xml_data);
+  								$xml_data              = $(xml_data);
+                  var query_str          = $xml_data.find("query_str").text();
+                  var html_str           = "";
+                  var counter            = 0 ;
+                  if(query_str==0){
+                    $xml_data.find("entry").each(function (){
+                      counter           += 1;
+                      var remainder      = counter%3;
+                      if(remainder==1){
+                        html_str += "<div class=\"row\">\n";
+                        }
+                      var module_name    = $(this).find("module_name").text();
+                      var module_version = $(this).find("module_version").text();
+                      html_str          += "  <div class=\"col-4\">\n"+
+                                           "    <input class=\"module_list btn-check\" id=\"module_"+counter+"\" type=\"checkbox\" value=\""+module_name+"@"+module_version+"\" onchange=\"update_selected_modules()\" />\n"+
+                                           "    <label class=\"btn btn-outline-secondary form-control\" for=\"module_"+counter+"\" >"+module_name+"/"+module_version+"</label>\n"+
+                                           "  </div>\n";
+                      if(remainder==0){
+                        html_str += "</div>\n";
+                        }
+                      });
+                    $("#available_modules").html(html_str);
+                    }
+                  }
+    });
+  }
+function check_script_limits(param_name,param_value){
+  var limit ;
+  var target_input ;
+  var run_comparison ;
+  switch(param_name){
+    case "name":
+      target_input   = "script_name";
+      run_comparison = false;
+      break;
+    case "cpu":
+      target_input   = "script_cpu";
+      limit          =   28;
+      run_comparison = true;
+      break;
+    case "mem":
+      target_input   = "script_mem";
+      limit          =  168;
+      run_comparison = true;
+      break;
+    case "hours":
+      target_input   = "script_hours";
+      limit          = 1000;
+      run_comparison = true;
+      break;
+    case "minutes":
+      target_input   = "script_minutes";
+      limit          =   59;
+      run_comparison = true;
+      break;
+    case "seconds":
+      target_input   = "script_seconds";
+      limit          =   59;
+      run_comparison = true;
+      break;
+    }
+  if (run_comparison){
+    if(param_value>=limit){
+      $("#"+target_input).val(limit);
+      }
+    }
+  if (((param_name == "hours") || (param_name == "minutes") || (param_name == "seconds")) && (param_value <10)){
+    $("#"+target_input).val("0"+param_value);
+    }
+  build_script_header();
+  }
+function build_script_header(){
+  var script_name    = $("#script_name").val()    ;
+  var script_cpu     = $("#script_cpu").val()     ;
+  var script_mem     = $("#script_mem").val()     ;
+  var script_hours   = $("#script_hours").val()   ;
+  var script_minutes = $("#script_minutes").val() ;
+  var script_seconds = $("#script_seconds").val() ;
+  if(script_name != "" && script_cpu != "" && script_mem != "" && script_hours != "" && script_minutes != "" && script_seconds != ""){
+    var header_str = "#!/bin/bash";
+    header_str    += "\n#SBATCH --job-name " + script_name;
+    header_str    += "\n#SBATCH --output "   + script_name +".%j.log";
+    header_str    += "\n#SBATCH --error "    + script_name +".%j.err";
+    header_str    += "\n#SBATCH --ntasks "   + script_cpu ;
+    header_str    += "\n#SBATCH --mem "      + script_mem +"gb" ;
+    header_str    += "\n#SBATCH --time "     + script_hours+":"+script_minutes+":"+script_seconds+"\n";
+    $("#script_header").html(header_str);
+  }
+}
+function update_selected_modules(){
+  var module_arr = [] ;
+  var module_str = "" ;
+  var script_str = "" ;
+  $(".module_list").each(function(){
+      if($(this).is(":checked")){
+        module_str = $(this).val().replace("@","/");
+        module_arr.push(module_str);
+        }
+      });
+  if(module_arr.length > 0){
+    module_arr.forEach(function(module_name){
+      script_str += "module load "+module_name+"\n";
+      });
+    $("#script_module_list").html(script_str);
+    }
+  else{
+    $("#script_module_list").html("");
+    }
+  }
+function mask_user_code(){
+  var user_code = document.getElementById('user_code');
+  var editor = CodeMirror.fromTextArea(user_code,{
+    mode:{name:"shell"},
+    lineNumbers:true,
+    indentUnit:4
+    });
+  editor.setSize("100%","95%");
+  editor.on('change',function(mirror){
+    var user_code = mirror.getValue();
+    user_code =htmlEncode(user_code);
+    var script_user_code = document.getElementById('script_user_code');
+    script_user_code.innerHTML = user_code ;
+    })
+  }
+function download_script(){
+  var script_name        = $("#script_name").val();
+  var script_header      = $("#script_header").html();
+  var script_module_list = $("#script_module_list").html();
+  var script_user_code   = $("#script_user_code").html();
+  var script_str         = script_header + script_module_list + script_user_code ;
+  script_str             = htmlDecode(script_str);
+  var element            = document.createElement('a');
+  element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(script_str));
+  element.setAttribute('download', script_name+".sbatch");
+  element.style.display  = 'none';
+  document.body.appendChild(element);
+  element.click();
+  document.body.removeChild(element);
+  $("#script_dialog_message").html("Your script has been downloaded as \""+script_name+".sbatch\"")
+  $("#script_dialog").modal('show') ;
+  setTimeout(function(){
+    $("#script_dialog").modal("hide");
+    $("#script_dialog_message").html("");
+    },2000);
+  }
+</script>
+</html>
